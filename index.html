@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Pixel Rings v2.4 (Sketch + Standard Modes)</title>
+  <style>
+    html, body { margin:0; padding:0; height:100%; background:#111; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    canvas { position:fixed; inset:0; touch-action:none; }
+
+    #bar{
+      position:fixed; left:10px; right:10px; top:10px;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      z-index:30; pointer-events:none;
+    }
+    #bar>*{ pointer-events:auto; }
+
+    .btn{
+      background:#1e88e5; color:#fff; border:none; border-radius:12px;
+      padding:10px 12px; font-weight:850; cursor:pointer;
+      box-shadow:0 6px 18px rgba(0,0,0,0.25);
+      white-space:nowrap;
+    }
+    .btn.secondary{ background:#2e2e2e; font-weight:780; }
+    .btn.small{ padding:8px 10px; font-weight:900; }
+
+    #hint{
+      position:fixed; top:58px; left:10px; right:10px;
+      color:rgba(255,255,255,0.9); font-size:13px;
+      padding:10px 12px; border-radius:14px;
+      background:rgba(0,0,0,0.42);
+      border:1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(6px);
+      pointer-events:none;
+      z-index:20;
+    }
+
+    #panel{
+      position:fixed; left:10px; right:10px; bottom:10px;
+      background:rgba(0,0,0,0.55); color:#fff;
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:14px; backdrop-filter:blur(6px);
+      z-index:25; overflow:hidden;
+      box-shadow:0 12px 28px rgba(0,0,0,0.35);
+    }
+    #panelHeader{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; gap:10px;
+    }
+    #panelBody{
+      max-height:34vh; overflow:auto;
+      padding:10px 12px 12px;
+      border-top:1px solid rgba(255,255,255,0.12);
+      display:none;
+    }
+    #panel.open #panelBody{ display:block; }
+
+    details{
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
+      padding:8px 10px;
+      background:rgba(255,255,255,0.04);
+    }
+    details summary{
+      cursor:pointer; font-weight:900; user-select:none;
+      list-style:none;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    details summary::-webkit-details-marker{ display:none; }
+
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .col{ flex:1 1 220px; }
+    label{ font-size:12px; opacity:0.9; display:flex; justify-content:space-between; gap:8px; width:100%; }
+    input[type="range"]{ width:100%; }
+    select{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color:#fff;
+      font-weight:800;
+      outline:none;
+    }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <button id="btnDraw" class="btn secondary">Draw</button>
+    <button id="btnBuild" class="btn">Build</button>
+    <button id="btnReset" class="btn secondary">Reset</button>
+    <button id="btnTilt" class="btn secondary">Tilt</button>
+    <button id="btnPanel" class="btn small secondary">⚙︎</button>
+  </div>
+
+  <div id="hint">
+    <b>Two modes:</b> Sketch (draw any shape) or Standard (choose circle/triangle/etc). Same pixel engine.
+  </div>
+
+  <canvas id="world"></canvas>
+  <canvas id="overlay"></canvas>
+
+  <div id="panel">
+    <div id="panelHeader">
+      <div style="font-weight:950;">Settings</div>
+      <div class="row" style="gap:8px;">
+        <div id="statusLine" style="opacity:0.85; font-size:12px;">Safe spawn ON</div>
+        <button id="btnClosePanel" class="btn small secondary">Close</button>
+      </div>
+    </div>
+
+    <div id="panelBody">
+      <details open>
+        <summary>Mode <span style="opacity:0.8;font-weight:750;">(Sketch/Standard)</span></summary>
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label>Mode <span id="vMode">Sketch</span></label>
+            <select id="modeSel">
+              <option value="sketch" selected>Sketch (User Draw)</option>
+              <option value="standard">Standard (Preset Shape)</option>
+            </select>
+          </div>
+          <div class="col" id="shapeBlock" style="display:none;">
+            <label>Shape <span id="vShape">Circle</span></label>
+            <select id="shapeSel">
+              <option value="circle" selected>Circle</option>
+              <option value="oval">Oval</option>
+              <option value="roundRect">Rounded Rectangle</option>
+              <option value="triangle">Triangle</option>
+              <option value="hex">Hexagon</option>
+              <option value="star">Star</option>
+              <option value="heart">Heart</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <div style="height:10px;"></div>
+
+      <details open>
+        <summary>Balls <span style="opacity:0.8;font-weight:750;">(size/count)</span></summary>
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label>Ball Size <span id="vBall">24</span></label>
+            <input id="ballD" type="range" min="12" max="48" step="1" value="24" />
+          </div>
+          <div class="col">
+            <label>Balls <span id="vCount">4</span></label>
+            <input id="ballN" type="range" min="1" max="10" step="1" value="4" />
+          </div>
+        </div>
+      </details>
+
+      <div style="height:10px;"></div>
+
+      <details open>
+        <summary>Rings <span style="opacity:0.8;font-weight:750;">(gap/max/grid)</span></summary>
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label>Lane Gap <span id="vGap">48</span></label>
+            <input id="laneGap" type="range" min="24" max="180" step="2" value="48" />
+          </div>
+          <div class="col">
+            <label>Rings (max) <span id="vRings">12</span></label>
+            <input id="maxRings" type="range" min="1" max="20" step="1" value="12" />
+          </div>
+          <div class="col">
+            <label>Pixel Grid <span id="vGrid">320</span></label>
+            <input id="gridN" type="range" min="192" max="512" step="64" value="320" />
+          </div>
+        </div>
+      </details>
+
+      <div style="height:10px;"></div>
+
+      <details>
+        <summary>Walls & Cutouts <span style="opacity:0.8;font-weight:750;">(thickness/gates)</span></summary>
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label>Wall Thickness <span id="vWall">12</span></label>
+            <input id="wallT" type="range" min="6" max="26" step="1" value="12" />
+          </div>
+          <div class="col">
+            <label>Gate Size (≥2×ball) <span id="vGate">48</span></label>
+            <input id="gateW" type="range" min="24" max="160" step="2" value="48" />
+          </div>
+          <div class="col">
+            <label>Gate Spread <span id="vSpread">180°</span></label>
+            <input id="gateSpread" type="range" min="90" max="180" step="5" value="180" />
+          </div>
+        </div>
+      </details>
+
+      <div style="height:10px;"></div>
+
+      <details>
+        <summary>Goal & Physics <span style="opacity:0.8;font-weight:750;">(center/gravity)</span></summary>
+        <div class="row" style="margin-top:10px;">
+          <div class="col">
+            <label>Center Radius <span id="vCenter">48</span></label>
+            <input id="centerR" type="range" min="20" max="140" step="2" value="48" />
+          </div>
+          <div class="col">
+            <label>Gravity <span id="vG">1.0</span></label>
+            <input id="grav" type="range" min="0.3" max="2.5" step="0.1" value="1.0" />
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+  <script>
+    // ===================== Utils =====================
+    const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+    const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+
+    function pointSegDist(p, a, b){
+      const vx = b.x - a.x, vy = b.y - a.y;
+      const wx = p.x - a.x, wy = p.y - a.y;
+      const c1 = vx*wx + vy*wy;
+      if (c1 <= 0) return Math.hypot(wx, wy);
+      const c2 = vx*vx + vy*vy;
+      if (c2 <= c1) return Math.hypot(p.x-b.x, p.y-b.y);
+      const t = c1 / c2;
+      const px = a.x + t*vx, py = a.y + t*vy;
+      return Math.hypot(p.x-px, p.y-py);
+    }
+
+    // ===================== Canvas =====================
+    const worldCanvas = document.getElementById('world');
+    const overlay = document.getElementById('overlay');
+    const octx = overlay.getContext('2d');
+
+    function resizeCanvases() {
+      const dpr = window.devicePixelRatio || 1;
+      for (const c of [worldCanvas, overlay]) {
+        c.width = Math.floor(window.innerWidth * dpr);
+        c.height = Math.floor(window.innerHeight * dpr);
+        c.style.width = window.innerWidth + 'px';
+        c.style.height = window.innerHeight + 'px';
+      }
+      octx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
+
+    // ===================== UI =====================
+    const el = {
+      btnDraw: document.getElementById('btnDraw'),
+      btnBuild: document.getElementById('btnBuild'),
+      btnReset: document.getElementById('btnReset'),
+      btnTilt: document.getElementById('btnTilt'),
+      btnPanel: document.getElementById('btnPanel'),
+      panel: document.getElementById('panel'),
+      panelBody: document.getElementById('panelBody'),
+      btnClosePanel: document.getElementById('btnClosePanel'),
+      statusLine: document.getElementById('statusLine'),
+
+      modeSel: document.getElementById('modeSel'),
+      shapeSel: document.getElementById('shapeSel'),
+      shapeBlock: document.getElementById('shapeBlock'),
+
+      ballD: document.getElementById('ballD'),
+      ballN: document.getElementById('ballN'),
+      laneGap: document.getElementById('laneGap'),
+      maxRings: document.getElementById('maxRings'),
+      gridN: document.getElementById('gridN'),
+      wallT: document.getElementById('wallT'),
+      gateW: document.getElementById('gateW'),
+      gateSpread: document.getElementById('gateSpread'),
+      centerR: document.getElementById('centerR'),
+      grav: document.getElementById('grav'),
+
+      vMode: document.getElementById('vMode'),
+      vShape: document.getElementById('vShape'),
+      vBall: document.getElementById('vBall'),
+      vCount: document.getElementById('vCount'),
+      vGap: document.getElementById('vGap'),
+      vRings: document.getElementById('vRings'),
+      vGrid: document.getElementById('vGrid'),
+      vWall: document.getElementById('vWall'),
+      vGate: document.getElementById('vGate'),
+      vSpread: document.getElementById('vSpread'),
+      vCenter: document.getElementById('vCenter'),
+      vG: document.getElementById('vG'),
+    };
+
+    const ui = { drawMode:true, tiltEnabled:false, tiltX:0, tiltY:0, mode:'sketch' };
+
+    function syncLabels(){
+      const D = Number(el.ballD.value);
+      el.vBall.textContent = el.ballD.value;
+      el.vCount.textContent = el.ballN.value;
+
+      // LaneGap cannot be less than 2x ball
+      const minGap = 2*D;
+      if (Number(el.laneGap.value) < minGap) el.laneGap.value = String(minGap);
+      el.vGap.textContent = el.laneGap.value;
+
+      el.vRings.textContent = el.maxRings.value;
+      el.vGrid.textContent = el.gridN.value;
+      el.vWall.textContent = el.wallT.value;
+
+      const minGate = 2*D;
+      if (Number(el.gateW.value) < minGate) el.gateW.value = String(minGate);
+      el.vGate.textContent = el.gateW.value;
+
+      el.vSpread.textContent = el.gateSpread.value + "°";
+      el.vCenter.textContent = el.centerR.value;
+      el.vG.textContent = Number(el.grav.value).toFixed(1);
+
+      ui.mode = el.modeSel.value;
+      el.vMode.textContent = ui.mode === 'sketch' ? 'Sketch' : 'Standard';
+      el.shapeBlock.style.display = (ui.mode === 'standard') ? '' : 'none';
+      el.vShape.textContent = el.shapeSel.options[el.shapeSel.selectedIndex].textContent;
+    }
+    ['input','change'].forEach(evt=>{
+      ['ballD','ballN','laneGap','maxRings','gridN','wallT','gateW','gateSpread','centerR','grav','modeSel','shapeSel'].forEach(id=>{
+        el[id].addEventListener(evt, syncLabels);
+      });
+    });
+    syncLabels();
+
+    el.btnPanel.onclick = ()=>{
+      el.panel.classList.toggle('open');
+    };
+    el.btnClosePanel.onclick = ()=>{
+      el.panel.classList.remove('open');
+    };
+
+    // ===================== Matter.js =====================
+    const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+    const engine = Engine.create();
+    engine.gravity.scale = 0.001;
+
+    const render = Render.create({
+      canvas: worldCanvas,
+      engine,
+      options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        wireframes: false,
+        background: '#141414',
+        pixelRatio: window.devicePixelRatio || 1
+      }
+    });
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+
+    const COLORS = { wallA:'#e53935', wallB:'#b71c1c', ball:'#ffd54f', center:'#8bc34a' };
+
+    let wallBodies = [];
+    let ballBodies = [];
+    let wallSegments = []; // for safe spawn checks
+    let boundaryPoly = null; // current boundary in screen coords
+    let centerPoint = null;
+
+    function clearWorld(){
+      for (const b of wallBodies) World.remove(engine.world, b);
+      for (const b of ballBodies) World.remove(engine.world, b);
+      wallBodies = []; ballBodies = []; wallSegments = [];
+      centerPoint = null;
+    }
+
+    function addSegmentWall(p1, p2, thickness, color){
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = Math.hypot(dx,dy);
+      if (len < 2) return null;
+      const mid = { x:(p1.x+p2.x)/2, y:(p1.y+p2.y)/2 };
+      const angle = Math.atan2(dy,dx);
+      const rect = Bodies.rectangle(mid.x, mid.y, len, thickness, {
+        isStatic:true, friction:0.2, restitution:0.1,
+        render:{ fillStyle: color }
+      });
+      Body.setAngle(rect, angle);
+      wallSegments.push({a:p1, b:p2});
+      return rect;
+    }
+
+    function wallsFromPolylineWithGates(poly, thickness, color, gateCenters, gateWidthPx){
+      const bodies = [];
+      const half = gateWidthPx/2;
+      for (let i=0;i<poly.length;i++){
+        const a = poly[i], b = poly[(i+1)%poly.length];
+        const mid = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+        let skip = false;
+        for (const gc of gateCenters){
+          if (dist(mid, gc) <= half) { skip = true; break; }
+        }
+        if (skip) continue;
+        const w = addSegmentWall(a,b,thickness,color);
+        if (w) bodies.push(w);
+      }
+      return bodies;
+    }
+
+    // ===================== Drawing capture (Sketch mode) =====================
+    let isDrawing = false;
+    let rawStroke = [];
+
+    function getPointerPos(e){
+      const rect = overlay.getBoundingClientRect();
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: cx-rect.left, y: cy-rect.top };
+    }
+
+    function drawOverlayPath(points, closed=false){
+      octx.clearRect(0,0,overlay.width,overlay.height);
+      if (!points || points.length < 2) return;
+      octx.save();
+      octx.lineWidth = 3;
+      octx.strokeStyle = 'rgba(255,255,255,0.85)';
+      octx.fillStyle = 'rgba(255,255,255,0.07)';
+      octx.beginPath();
+      octx.moveTo(points[0].x, points[0].y);
+      for (let i=1;i<points.length;i++) octx.lineTo(points[i].x, points[i].y);
+      if (closed) octx.closePath();
+      octx.stroke();
+      if (closed) octx.fill();
+      octx.restore();
+      if (centerPoint) drawCenterMarker();
+    }
+
+    function drawCenterMarker(){
+      if (!centerPoint) return;
+      const R = Number(el.centerR.value);
+      octx.save();
+      octx.beginPath();
+      octx.arc(centerPoint.x, centerPoint.y, R, 0, Math.PI*2);
+      octx.strokeStyle = 'rgba(139,195,74,0.95)';
+      octx.lineWidth = 4;
+      octx.stroke();
+      octx.fillStyle = 'rgba(139,195,74,0.12)';
+      octx.fill();
+      octx.restore();
+    }
+
+    function simplifyByDistance(points, minStep){
+      if (points.length < 3) return points.slice();
+      const out = [points[0]];
+      for (let i=1;i<points.length;i++){
+        if (dist(points[i], out[out.length-1]) >= minStep) out.push(points[i]);
+      }
+      return out;
+    }
+
+    function fitToScreen(pts, margin=26){
+      const W=window.innerWidth, H=window.innerHeight;
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      for (const p of pts){ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); }
+      const bw = Math.max(1, maxX-minX), bh = Math.max(1, maxY-minY);
+      const targetW = W-margin*2, targetH = H-margin*2;
+      const s = Math.min(targetW/bw, targetH/bh);
+      const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+      const tx=W/2, ty=H/2;
+      return pts.map(p=>({ x:(p.x-cx)*s+tx, y:(p.y-cy)*s+ty }));
+    }
+
+    function startDraw(e){
+      if (ui.mode !== 'sketch') return;
+      if (!ui.drawMode) return;
+      isDrawing=true;
+      rawStroke=[getPointerPos(e)];
+      drawOverlayPath(rawStroke,false);
+    }
+    function moveDraw(e){
+      if (ui.mode !== 'sketch') return;
+      if (!ui.drawMode || !isDrawing) return;
+      const p=getPointerPos(e);
+      const last=rawStroke[rawStroke.length-1];
+      if (!last || dist(p,last)>2) rawStroke.push(p);
+      drawOverlayPath(rawStroke,false);
+    }
+    function endDraw(){
+      if (ui.mode !== 'sketch') return;
+      if (!ui.drawMode || !isDrawing) return;
+      isDrawing=false;
+      if (rawStroke.length < 10) { boundaryPoly=null; octx.clearRect(0,0,overlay.width,overlay.height); return; }
+      const D=Number(el.ballD.value);
+      const minStep=Math.max(3, D/3);
+      let pts=simplifyByDistance(rawStroke, minStep);
+      pts=fitToScreen(pts, 26);
+      boundaryPoly=pts;
+      centerPoint=null;
+      drawOverlayPath(boundaryPoly,true);
+    }
+
+    overlay.addEventListener('mousedown', startDraw);
+    overlay.addEventListener('mousemove', moveDraw);
+    window.addEventListener('mouseup', endDraw);
+    overlay.addEventListener('touchstart', (e)=>{ e.preventDefault(); startDraw(e); }, {passive:false});
+    overlay.addEventListener('touchmove', (e)=>{ e.preventDefault(); moveDraw(e); }, {passive:false});
+    overlay.addEventListener('touchend', (e)=>{ e.preventDefault(); endDraw(); }, {passive:false});
+
+    // ===================== Standard shape presets =====================
+    function makeCircle(cx,cy,r,n=160){
+      const pts=[];
+      for (let i=0;i<n;i++){
+        const a = (i/n) * Math.PI*2;
+        pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) });
+      }
+      return pts;
+    }
+    function makeOval(cx,cy,rx,ry,n=180){
+      const pts=[];
+      for (let i=0;i<n;i++){
+        const a=(i/n)*Math.PI*2;
+        pts.push({ x: cx + rx*Math.cos(a), y: cy + ry*Math.sin(a) });
+      }
+      return pts;
+    }
+    function makeRegularPolygon(cx,cy,r,sides){
+      const pts=[];
+      for (let i=0;i<sides;i++){
+        const a = -Math.PI/2 + (i/sides)*Math.PI*2;
+        pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) });
+      }
+      // densify edges for smoother pixel raster
+      const dense=[];
+      const steps=20;
+      for (let i=0;i<pts.length;i++){
+        const a=pts[i], b=pts[(i+1)%pts.length];
+        for (let s=0;s<steps;s++){
+          const t=s/steps;
+          dense.push({ x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t });
+        }
+      }
+      return dense;
+    }
+    function makeRoundedRect(cx,cy,w,h,r){
+      const pts=[];
+      const nArc=24;
+      const x0=cx-w/2, x1=cx+w/2, y0=cy-h/2, y1=cy+h/2;
+      const rr = Math.max(5, Math.min(r, w/2-5, h/2-5));
+      // top-right
+      for(let i=0;i<=nArc;i++){ const a=-Math.PI/2 + (i/nArc)*(Math.PI/2); pts.push({x:(x1-rr)+rr*Math.cos(a), y:(y0+rr)+rr*Math.sin(a)}); }
+      // bottom-right
+      for(let i=0;i<=nArc;i++){ const a=0 + (i/nArc)*(Math.PI/2); pts.push({x:(x1-rr)+rr*Math.cos(a), y:(y1-rr)+rr*Math.sin(a)}); }
+      // bottom-left
+      for(let i=0;i<=nArc;i++){ const a=Math.PI/2 + (i/nArc)*(Math.PI/2); pts.push({x:(x0+rr)+rr*Math.cos(a), y:(y1-rr)+rr*Math.sin(a)}); }
+      // top-left
+      for(let i=0;i<=nArc;i++){ const a=Math.PI + (i/nArc)*(Math.PI/2); pts.push({x:(x0+rr)+rr*Math.cos(a), y:(y0+rr)+rr*Math.sin(a)}); }
+      return pts;
+    }
+    function makeStar(cx,cy,rOuter,rInner,points=5){
+      const pts=[];
+      const n = points*2;
+      for(let i=0;i<n;i++){
+        const a = -Math.PI/2 + (i/n)*Math.PI*2;
+        const r = (i%2===0) ? rOuter : rInner;
+        pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) });
+      }
+      // densify
+      const dense=[];
+      const steps=16;
+      for (let i=0;i<pts.length;i++){
+        const a=pts[i], b=pts[(i+1)%pts.length];
+        for (let s=0;s<steps;s++){
+          const t=s/steps;
+          dense.push({ x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t });
+        }
+      }
+      return dense;
+    }
+    function makeHeart(cx,cy,size){
+      const pts=[];
+      const n=220;
+      for (let i=0;i<n;i++){
+        const t = (i/n) * Math.PI*2;
+        // classic heart curve
+        const x = 16*Math.pow(Math.sin(t),3);
+        const y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
+        pts.push({ x: cx + (x/18)*size, y: cy - (y/18)*size });
+      }
+      return pts;
+    }
+
+    function buildStandardBoundary(){
+      const W=window.innerWidth, H=window.innerHeight;
+      const pad=26;
+      const cx=W/2, cy=H/2;
+      const s = Math.min(W,H)/2 - pad;
+      const shape = el.shapeSel.value;
+
+      let pts;
+      if (shape === 'circle') pts = makeCircle(cx,cy,s,180);
+      else if (shape === 'oval') pts = makeOval(cx,cy,s*0.95,s*0.70,200);
+      else if (shape === 'roundRect') pts = makeRoundedRect(cx,cy,s*1.55,s*1.10, s*0.22);
+      else if (shape === 'triangle') pts = makeRegularPolygon(cx,cy,s,3);
+      else if (shape === 'hex') pts = makeRegularPolygon(cx,cy,s,6);
+      else if (shape === 'star') pts = makeStar(cx,cy,s, s*0.46, 5);
+      else if (shape === 'heart') pts = makeHeart(cx,cy,s*1.0);
+      else pts = makeCircle(cx,cy,s,180);
+
+      boundaryPoly = pts;
+      centerPoint = null;
+      drawOverlayPath(boundaryPoly,true);
+    }
+
+    // Whenever switching to standard, show it immediately
+    el.modeSel.addEventListener('change', ()=>{
+      syncLabels();
+      if (el.modeSel.value === 'standard'){
+        ui.drawMode = false;
+        el.btnDraw.textContent = "Draw";
+        el.btnDraw.classList.add('secondary');
+        buildStandardBoundary();
+      } else {
+        // sketch mode
+        ui.drawMode = true;
+        el.btnDraw.textContent = "Draw";
+        el.btnDraw.classList.add('secondary');
+        octx.clearRect(0,0,overlay.width,overlay.height);
+        if (boundaryPoly) drawOverlayPath(boundaryPoly,true);
+      }
+    });
+    el.shapeSel.addEventListener('change', ()=>{
+      syncLabels();
+      if (ui.mode === 'standard') buildStandardBoundary();
+    });
+
+    // ===================== Pixel engine =====================
+    function makeGrid(N){
+      const W=window.innerWidth, H=window.innerHeight;
+      const scale = Math.min(W, H) / N;
+      const offsetX = (W - N*scale)/2;
+      const offsetY = (H - N*scale)/2;
+      return {
+        N, scale, offsetX, offsetY,
+        toGrid: (x,y)=>({
+          gx: clamp(Math.floor((x-offsetX)/scale), 0, N-1),
+          gy: clamp(Math.floor((y-offsetY)/scale), 0, N-1)
+        }),
+        toScreen: (gx,gy)=>({
+          x: offsetX + (gx+0.5)*scale,
+          y: offsetY + (gy+0.5)*scale
+        })
+      };
+    }
+
+    function rasterizePolygonToMask(poly, grid){
+      const N=grid.N;
+      const off=document.createElement('canvas');
+      off.width=N; off.height=N;
+      const ctx=off.getContext('2d');
+      ctx.clearRect(0,0,N,N);
+      ctx.fillStyle='#fff';
+      ctx.beginPath();
+      const p0=grid.toGrid(poly[0].x, poly[0].y);
+      ctx.moveTo(p0.gx+0.5, p0.gy+0.5);
+      for(let i=1;i<poly.length;i++){
+        const gp=grid.toGrid(poly[i].x, poly[i].y);
+        ctx.lineTo(gp.gx+0.5, gp.gy+0.5);
+      }
+      ctx.closePath(); ctx.fill();
+      const img=ctx.getImageData(0,0,N,N).data;
+      const mask=new Uint8Array(N*N);
+      for(let i=0;i<N*N;i++) mask[i] = img[i*4+3] > 0 ? 1 : 0;
+      return mask;
+    }
+
+    function erodeMask(mask, N, r){
+      if (r<=0) return mask.slice();
+      const out=new Uint8Array(N*N);
+      for(let y=0;y<N;y++){
+        for(let x=0;x<N;x++){
+          const idx=y*N+x;
+          if (mask[idx]===0){ out[idx]=0; continue; }
+          let ok=1;
+          const y0=Math.max(0,y-r), y1=Math.min(N-1,y+r);
+          const x0=Math.max(0,x-r), x1=Math.min(N-1,x+r);
+          for(let yy=y0; yy<=y1 && ok; yy++){
+            const row=yy*N;
+            for(let xx=x0; xx<=x1; xx++){
+              if (mask[row+xx]===0){ ok=0; break; }
+            }
+          }
+          out[idx]=ok;
+        }
+      }
+      return out;
+    }
+
+    function subtractMask(a,b){
+      const out=new Uint8Array(a.length);
+      for(let i=0;i<a.length;i++) out[i] = (a[i]===1 && b[i]===0) ? 1 : 0;
+      return out;
+    }
+
+    function largestComponentMask(mask, N){
+      const seen=new Uint8Array(N*N);
+      let bestSize=0, best=null;
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+      for(let i=0;i<N*N;i++){
+        if (mask[i]===0 || seen[i]) continue;
+        const q=[i]; seen[i]=1;
+        const comp=[i];
+        while(q.length){
+          const v=q.pop();
+          const x=v%N, y=(v/N)|0;
+          for(const [dx,dy] of dirs){
+            const nx=x+dx, ny=y+dy;
+            if(nx<0||nx>=N||ny<0||ny>=N) continue;
+            const ni=ny*N+nx;
+            if(mask[ni]===1 && !seen[ni]){ seen[ni]=1; q.push(ni); comp.push(ni); }
+          }
+        }
+        if(comp.length>bestSize){ bestSize=comp.length; best=comp; }
+      }
+      if(!best) return mask;
+      const out=new Uint8Array(N*N);
+      for(const idx of best) out[idx]=1;
+      return out;
+    }
+
+    function traceBoundaryFromMask(mask, N){
+      const isBoundary=(x,y)=>{
+        const idx=y*N+x;
+        if(mask[idx]===0) return false;
+        if(x===0||y===0||x===N-1||y===N-1) return true;
+        return (mask[idx-1]===0 || mask[idx+1]===0 || mask[idx-N]===0 || mask[idx+N]===0);
+      };
+      let sx=-1, sy=-1;
+      outer:
+      for(let y=0;y<N;y++){
+        for(let x=0;x<N;x++){
+          if(isBoundary(x,y)){ sx=x; sy=y; break outer; }
+        }
+      }
+      if(sx<0) return [];
+      const dirs=[[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]];
+      let x=sx, y=sy, px=sx-1, py=sy;
+      const poly=[];
+      const visited=new Set();
+      const edgeKey=(ax,ay,bx,by)=> ax+','+ay+'|'+bx+','+by;
+      for(let iter=0; iter<N*N*4; iter++){
+        poly.push({x,y});
+        let startDir=0;
+        for(let d=0; d<8; d++){
+          if(x+dirs[d][0]===px && y+dirs[d][1]===py){ startDir=(d+1)%8; break; }
+        }
+        let found=false;
+        for(let k=0;k<8;k++){
+          const d=(startDir+k)%8;
+          const nx=x+dirs[d][0], ny=y+dirs[d][1];
+          if(nx<0||nx>=N||ny<0||ny>=N) continue;
+          if(mask[ny*N+nx]===1){
+            const ek=edgeKey(x,y,nx,ny);
+            if(visited.has(ek) && Math.hypot(nx-sx,ny-sy)<2 && iter>10) return poly;
+            visited.add(ek);
+            px=x; py=y; x=nx; y=ny;
+            found=true;
+            break;
+          }
+        }
+        if(!found) break;
+        if(x===sx && y===sy && iter>10) break;
+      }
+      return poly;
+    }
+
+    function decimatePolyline(poly, step){
+      if(poly.length<3) return poly;
+      const out=[poly[0]];
+      let acc=0;
+      for(let i=1;i<poly.length;i++){
+        acc += dist(poly[i], poly[i-1]);
+        if(acc>=step){ out.push(poly[i]); acc=0; }
+      }
+      return out.length>=3 ? out : poly;
+    }
+
+    function smoothPolyline(poly, passes=2){
+      if(poly.length<5) return poly;
+      let p=poly.slice();
+      for(let t=0;t<passes;t++){
+        const q=[];
+        for(let i=0;i<p.length;i++){
+          const a=p[(i-1+p.length)%p.length];
+          const b=p[i];
+          const c=p[(i+1)%p.length];
+          q.push({ x:(a.x+b.x*2+c.x)/4, y:(a.y+b.y*2+c.y)/4 });
+        }
+        p=q;
+      }
+      return p;
+    }
+
+    // Optimized center: distance-to-boundary map (two-pass chamfer approx)
+    function computeDistanceToOutside(mask, N){
+      const INF = 1e9;
+      const d = new Float32Array(N*N);
+      for(let i=0;i<N*N;i++) d[i] = (mask[i]===1) ? INF : 0;
+
+      // Forward pass
+      for(let y=0;y<N;y++){
+        for(let x=0;x<N;x++){
+          const i=y*N+x;
+          if(d[i]===0) continue;
+          let best=d[i];
+          if(x>0) best = Math.min(best, d[i-1]+1);
+          if(y>0) best = Math.min(best, d[i-N]+1);
+          if(x>0&&y>0) best = Math.min(best, d[i-N-1]+1.4142);
+          if(x<N-1&&y>0) best = Math.min(best, d[i-N+1]+1.4142);
+          d[i]=best;
+        }
+      }
+      // Backward pass
+      for(let y=N-1;y>=0;y--){
+        for(let x=N-1;x>=0;x--){
+          const i=y*N+x;
+          if(d[i]===0) continue;
+          let best=d[i];
+          if(x<N-1) best = Math.min(best, d[i+1]+1);
+          if(y<N-1) best = Math.min(best, d[i+N]+1);
+          if(x<N-1&&y<N-1) best = Math.min(best, d[i+N+1]+1.4142);
+          if(x>0&&y<N-1) best = Math.min(best, d[i+N-1]+1.4142);
+          d[i]=best;
+        }
+      }
+      return d;
+    }
+
+    function bestCenterFromMask(mask, N, distMap){
+      let bestI=-1;
+      let bestD=-1;
+      for(let i=0;i<N*N;i++){
+        if(mask[i]===1 && distMap[i]>bestD){
+          bestD=distMap[i]; bestI=i;
+        }
+      }
+      return { idx: bestI, d: bestD };
+    }
+
+    function pickGateCenters(poly, center, gateCount, spreadDeg){
+      const candidates = poly.map(p=>{
+        const ang = Math.atan2(p.y-center.y, p.x-center.x);
+        const r = Math.hypot(p.x-center.x, p.y-center.y);
+        return {p, ang, r};
+      }).sort((a,b)=>b.r-a.r);
+
+      const chosen=[];
+      const minSep = (spreadDeg * Math.PI/180) * (gateCount===1?0:0.9);
+      const angDiff=(a,b)=>{
+        let d=Math.abs(a-b);
+        while(d>Math.PI) d=Math.abs(d-2*Math.PI);
+        return d;
+      };
+
+      for(const c of candidates){
+        if(!chosen.length){ chosen.push(c); if(chosen.length===gateCount) break; continue; }
+        let ok=true;
+        for(const ch of chosen){
+          if(angDiff(c.ang, ch.ang) < minSep){ ok=false; break; }
+        }
+        if(ok) chosen.push(c);
+        if(chosen.length===gateCount) break;
+      }
+
+      if(chosen.length < gateCount && candidates.length){
+        const base = chosen[0]?.ang ?? 0;
+        while(chosen.length < gateCount){
+          const target = base + Math.PI;
+          let best=candidates[0], bestD=1e9;
+          for(const c of candidates.slice(0, Math.min(500, candidates.length))){
+            const d=angDiff(c.ang,target);
+            if(d<bestD){ bestD=d; best=c; }
+          }
+          chosen.push(best);
+        }
+      }
+      return chosen.map(x=>x.p);
+    }
+
+    function safeSpawnFromRingMask(ringMask, grid){
+      const D = Number(el.ballD.value);
+      const r = D/2;
+      const nBalls = Number(el.ballN.value);
+      const N = grid.N;
+      const wallBuffer = r + (Number(el.wallT.value)/2) + 2;
+
+      // candidates from ring pixels, prefer top-left region
+      const candidates=[];
+      for(let y=0;y<N;y+=2){
+        for(let x=0;x<N;x+=2){
+          if(ringMask[y*N+x]===1) candidates.push({x,y,score:x+y});
+        }
+      }
+      candidates.sort((a,b)=>a.score-b.score);
+
+      function isSafe(p){
+        // check distance to wall segments
+        for(const s of wallSegments){
+          if(pointSegDist(p, s.a, s.b) < wallBuffer) return false;
+        }
+        return true;
+      }
+
+      const picked=[];
+      let tries=0;
+      for(const c of candidates){
+        if(tries>4000) break;
+        tries++;
+        const sp = grid.toScreen(c.x, c.y);
+        if(!isSafe(sp)) continue;
+        picked.push(sp);
+        if(picked.length >= nBalls) break;
+      }
+
+      // fallback: if not enough, just take some safe jitter around first safe point
+      if(picked.length){
+        const base=picked[0];
+        while(picked.length<nBalls){
+          const sp={ x: base.x + (picked.length)*(D*1.05), y: base.y + (picked.length)*(D*0.6) };
+          if(isSafe(sp)) picked.push(sp); else break;
+        }
+      }
+
+      for(let i=0;i<picked.length;i++){
+        const p=picked[i];
+        const b = Bodies.circle(p.x, p.y, r, {
+          friction:0.02, frictionAir:0.006, restitution:0.15, density:0.002,
+          render:{ fillStyle: COLORS.ball }
+        });
+        ballBodies.push(b);
+        World.add(engine.world, b);
+      }
+    }
+
+    function buildPixelRings(){
+      if (!boundaryPoly || boundaryPoly.length < 5) return;
+      clearWorld();
+
+      const N = Number(el.gridN.value);
+      const grid = makeGrid(N);
+
+      const D = Number(el.ballD.value);
+      const T = Number(el.wallT.value);
+      const maxR = Number(el.maxRings.value);
+      const laneGapPx = Math.max(2*D, Number(el.laneGap.value));
+      const gateWidthPx = Math.max(2*D, Number(el.gateW.value));
+      const spreadDeg = Number(el.gateSpread.value);
+
+      const cellPx = grid.scale;
+      const toRadFloor = (px)=> Math.max(1, Math.floor(px / cellPx));
+
+      const laneR = toRadFloor(laneGapPx);
+      const wallR = toRadFloor(T);
+
+      // rasterize and clean
+      let m0 = rasterizePolygonToMask(boundaryPoly, grid);
+      m0 = largestComponentMask(m0, N);
+
+      // safe margin from outer boundary: wall half + ball radius
+      const safeMarginPx = (T/2) + (D/2) + 2;
+      let mCurr = erodeMask(m0, N, toRadFloor(safeMarginPx));
+      mCurr = largestComponentMask(mCurr, N);
+
+      // optimized center from distance map
+      const dmap = computeDistanceToOutside(mCurr, N);
+      const bc = bestCenterFromMask(mCurr, N, dmap);
+      if (bc.idx >= 0){
+        const cx = bc.idx % N, cy = (bc.idx / N) | 0;
+        centerPoint = grid.toScreen(cx, cy);
+      } else {
+        centerPoint = { x: window.innerWidth/2, y: window.innerHeight/2 };
+      }
+
+      // Draw preview boundary + center
+      drawOverlayPath(boundaryPoly, true);
+
+      // Outer wall
+      const outerPix = traceBoundaryFromMask(mCurr, N);
+      if (outerPix.length < 40) return;
+      const outerPoly = smoothPolyline(decimatePolyline(outerPix, 2), 2).map(p=>grid.toScreen(p.x,p.y));
+      wallBodies.push(...wallsFromPolylineWithGates(outerPoly, T, COLORS.wallA, [], 0));
+
+      let firstRingMask = null;
+
+      for(let k=0; k<maxR; k++){
+        let mLaneInner = erodeMask(mCurr, N, laneR);
+        mLaneInner = largestComponentMask(mLaneInner, N);
+
+        const ringMask = subtractMask(mCurr, mLaneInner);
+        let ringCount = 0;
+        for(let i=0;i<ringMask.length;i++) ringCount += ringMask[i];
+        if(ringCount < N*N*0.002) break;
+
+        let mNext = erodeMask(mLaneInner, N, wallR);
+        mNext = largestComponentMask(mNext, N);
+
+        let nextCount = 0;
+        for(let i=0;i<mNext.length;i++) nextCount += mNext[i];
+        const isInnermost = nextCount < N*N*0.004;
+        const gateCount = isInnermost ? 1 : 2;
+
+        const wallPix = traceBoundaryFromMask(mLaneInner, N);
+        if(wallPix.length < 40) break;
+        const wallPoly = smoothPolyline(decimatePolyline(wallPix, 2), 2).map(p=>grid.toScreen(p.x,p.y));
+
+        const gates = pickGateCenters(wallPoly, centerPoint, gateCount, spreadDeg);
+        const col = (k%2===0) ? COLORS.wallB : COLORS.wallA;
+        wallBodies.push(...wallsFromPolylineWithGates(wallPoly, T, col, gates, gateWidthPx));
+
+        if(k===0) firstRingMask = ringMask;
+
+        mCurr = mNext;
+        if(isInnermost) break;
+      }
+
+      World.add(engine.world, wallBodies);
+
+      if(firstRingMask) safeSpawnFromRingMask(firstRingMask, grid);
+    }
+
+    // ===================== Tilt =====================
+    function applyGravity(){
+      const gScale = Number(el.grav.value);
+      engine.gravity.x = ui.tiltX * gScale;
+      engine.gravity.y = ui.tiltY * gScale;
+    }
+    async function enableTilt(){
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') throw new Error('Permission denied');
+      }
+      ui.tiltEnabled = true;
+    }
+    window.addEventListener('deviceorientation', (e)=>{
+      if(!ui.tiltEnabled) return;
+      const gamma = e.gamma || 0;
+      const beta  = e.beta  || 0;
+      ui.tiltX = clamp(gamma/30, -1, 1);
+      ui.tiltY = clamp(beta/30, -1, 1);
+      applyGravity();
+    }, true);
+
+    const keys={ArrowLeft:false,ArrowRight:false,ArrowUp:false,ArrowDown:false};
+    window.addEventListener('keydown',(e)=>{ if(e.key in keys) keys[e.key]=true; });
+    window.addEventListener('keyup',(e)=>{ if(e.key in keys) keys[e.key]=false; });
+    Events.on(engine,'beforeUpdate',()=>{
+      if(!ui.tiltEnabled){
+        const tx = (keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0);
+        const ty = (keys.ArrowDown?1:0)-(keys.ArrowUp?1:0);
+        ui.tiltX = tx*0.7; ui.tiltY = ty*0.7;
+        applyGravity();
+      }
+    });
+
+    // ===================== Buttons =====================
+    el.btnDraw.onclick = ()=>{
+      if (ui.mode !== 'sketch') return; // draw only in sketch mode
+      ui.drawMode = !ui.drawMode;
+      el.btnDraw.classList.toggle('secondary', ui.drawMode);
+      // keep label simple
+      el.btnDraw.textContent = 'Draw';
+      if (!ui.drawMode) octx.clearRect(0,0,overlay.width,overlay.height);
+      else if (boundaryPoly) drawOverlayPath(boundaryPoly,true);
+    };
+
+    el.btnBuild.onclick = ()=>{
+      if (ui.mode === 'standard') buildStandardBoundary();
+      buildPixelRings();
+    };
+
+    el.btnReset.onclick = ()=>{
+      boundaryPoly = null;
+      rawStroke = [];
+      octx.clearRect(0,0,overlay.width,overlay.height);
+      clearWorld();
+    };
+
+    el.btnTilt.onclick = async ()=>{
+      try{
+        await enableTilt();
+        el.btnTilt.textContent = 'Tilt✓';
+        el.btnTilt.disabled = true;
+      }catch(err){
+        alert('Tilt permission failed. On iPhone: Settings > Safari > Motion & Orientation Access.');
+      }
+    };
+  </script>
+</body>
+</html>
